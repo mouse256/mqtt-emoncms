@@ -24,9 +24,9 @@ public class MqttSubscriberAlfen {
     private final ObjectReader propertiesReader;
     private final AlfenConfig alfenConfig;
     private static final Pattern PROPERTIES_REGEX = Pattern.compile("^alfen/properties/(\\S+)/category/(\\S+)$");
-    private final EmonPoster emonPoster;
+    private final EmonPosterCache emonPoster;
 
-    public MqttSubscriberAlfen(ObjectMapper objectMapper, AlfenConfig alfenConfig, EmonPoster emonPoster) {
+    public MqttSubscriberAlfen(ObjectMapper objectMapper, AlfenConfig alfenConfig, EmonPosterCache emonPoster) {
         this.propertiesReader = objectMapper.readerForListOf(PropertyParsed.class);
         this.alfenConfig = alfenConfig;
         this.emonPoster = emonPoster;
@@ -57,7 +57,7 @@ public class MqttSubscriberAlfen {
                 Map<String, Object> data = properties.stream()
                         .filter(p -> categoryConfig.containsKey(p.id()))
                         .collect(Collectors.toMap(p -> categoryConfig.get(p.id()), PropertyParsed::value));
-                emonPoster.post(meterName, data);
+                emonPoster.add(meterName, data);
             } else {
                 LOG.warn("Don't know how to handle topic {}", msg.getTopic());
             }
