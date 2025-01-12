@@ -37,9 +37,11 @@ public class MqttSubscriberSlimmelezer {
 
     private void sendInfo(Long l) {
         vertx.executeBlocking((Callable<Void>) () -> {
+            HashMap<String, Double> localValues;
             synchronized (values) {
-                emonPoster.post(DEVICE, values);
+                localValues = new HashMap<>(values);
             }
+            emonPoster.post(DEVICE, localValues);
             return null;
         });
     }
