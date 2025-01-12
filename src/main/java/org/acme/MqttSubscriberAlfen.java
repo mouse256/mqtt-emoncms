@@ -34,6 +34,9 @@ public class MqttSubscriberAlfen {
 
     @Incoming("alfen")
     CompletionStage<Void> consume(MqttMessage<byte[]> msg) {
+        if (!alfenConfig.enabled()) {
+            return msg.ack();
+        }
         try {
             LOG.debug("Incoming message on: {}", msg.getTopic());
             Matcher matcher = PROPERTIES_REGEX.matcher(msg.getTopic());
