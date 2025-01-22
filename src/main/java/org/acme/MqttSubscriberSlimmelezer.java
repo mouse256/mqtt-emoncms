@@ -21,17 +21,21 @@ public class MqttSubscriberSlimmelezer {
     private static final Pattern PROPERTIES_REGEX = Pattern.compile("^slimmelezer/sensor/(\\S+)/state$");
     private final EmonPosterCache emonPoster;
     private static final String DEVICE = "slimmelezer";
-    private final Map<String, Double> values = new HashMap<>();
 
 
     public MqttSubscriberSlimmelezer(SlimmelezerConfig slimmelezerConfig, EmonPosterCache emonPoster) {
         this.slimmelezerConfig = slimmelezerConfig;
         this.emonPoster = emonPoster;
+        emonPoster.setName("Slimmelezer");
     }
 
 
     @Incoming("slimmelezer")
     CompletionStage<Void> consume(MqttMessage<byte[]> msg) {
+        if (!slimmelezerConfig.enabled()) {
+            LOG.debug("Slimmelezer is disabled");
+            return msg.ack();
+        }
         try {
             LOG.debug("Incoming message on: {}", msg.getTopic());
             Matcher matcher = PROPERTIES_REGEX.matcher(msg.getTopic());

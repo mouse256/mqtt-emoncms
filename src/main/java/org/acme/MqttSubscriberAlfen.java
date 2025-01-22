@@ -27,9 +27,11 @@ public class MqttSubscriberAlfen {
     private final EmonPosterCache emonPoster;
 
     public MqttSubscriberAlfen(ObjectMapper objectMapper, AlfenConfig alfenConfig, EmonPosterCache emonPoster) {
+        LOG.info("Creating mqtt subscriber for Alfen");
         this.propertiesReader = objectMapper.readerForListOf(PropertyParsed.class);
         this.alfenConfig = alfenConfig;
         this.emonPoster = emonPoster;
+        emonPoster.setName("Alfen");
     }
 
     @Incoming("alfen")
