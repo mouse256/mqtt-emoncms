@@ -56,6 +56,10 @@ public class MqttSubscriberQbus {
             LOG.warn("MQTT is disabled");
             return;
         }
+        if (!qbusConfig.enabled()) {
+            LOG.warn("QBUS is disabled");
+            return;
+        }
         vertx.setPeriodic(Duration.ofSeconds(5).toMillis(), this::sendInfo);
     }
 
@@ -95,6 +99,9 @@ public class MqttSubscriberQbus {
     @Incoming("qbusInfo")
     @OnOverflow(value = OnOverflow.Strategy.BUFFER, bufferSize = 500)
     CompletionStage<Void> consumeInfo(MqttMessage<byte[]> msg) {
+        if (!qbusConfig.enabled()) {
+            return msg.ack();
+        }
         try {
             Matcher m = TOPIC_INFO_REGEX.matcher(msg.getTopic());
             if (!m.matches()) {
@@ -123,6 +130,9 @@ public class MqttSubscriberQbus {
     @Incoming("qbusState")
     @OnOverflow(value = OnOverflow.Strategy.BUFFER, bufferSize = 500)
     CompletionStage<Void> consumeState(MqttMessage<byte[]> msg) {
+        if (!qbusConfig.enabled()) {
+            return msg.ack();
+        }
         try {
             Matcher m = TOPIC_STATE_REGEX.matcher(msg.getTopic());
             if (!m.matches()) {

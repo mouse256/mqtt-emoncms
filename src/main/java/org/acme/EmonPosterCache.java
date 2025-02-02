@@ -26,7 +26,7 @@ public class EmonPosterCache {
         this.emonPoster = emonPoster;
         this.vertx = vertx;
         this.name = "";
-        vertx.setPeriodic(Duration.ofSeconds(5).toMillis(), this::sendInfo);
+        vertx.setPeriodic(Duration.ofSeconds(10).toMillis(), this::sendInfo);
     }
 
     public void setName(String name) {
@@ -44,7 +44,7 @@ public class EmonPosterCache {
     }
 
     private void sendInfo(Long l) {
-        LOG.info("[{}] Sending info to emoncms", name);
+        LOG.debug("[{}] Sending info to emoncms", name);
         vertx.executeBlocking((Callable<Void>) () -> {
             Map<String, Map<String, Object>> localValues;
             synchronized (valuesForDevices) {
