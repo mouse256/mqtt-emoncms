@@ -68,15 +68,17 @@ public class MqttSubscriberEvcc {
                 }
                 default -> null;
             };
-            if (meterConfig != null) {
-                double value = Double.parseDouble(new String(msg.getPayload()));
+            String payload = new String(msg.getPayload());
+            if (meterConfig != null && !payload.isEmpty()) {
+                double value = Double.parseDouble(payload);
                 LOG.debug("Value for {} -> {}: {}", DEVICE, meterConfig, value);
                 emonPoster.add(DEVICE, meterConfig, value);
             }
             return msg.ack();
         } catch (Exception e) {
             LOG.warn("Could not parse message on topic {}", msg.getTopic(), e);
-            return msg.nack(e);
+            return msg.ack();
+            //return msg.nack(e);
         }
     }
 
