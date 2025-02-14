@@ -1,52 +1,68 @@
 package org.acme;
 
 import io.smallrye.reactive.messaging.mqtt.MqttMessage;
+import io.vertx.mqtt.messages.MqttPublishMessage;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandles;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.CompletionStage;
 
 
 @ApplicationScoped
-public class MqttSubscriberEvcc {
+public class MqttSubscriberEvcc implements MqttSubscriber {
     private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private final EvccConfig evccConfig;
     private final EmonPosterCache emonPoster;
+    private static final String PREFIX = "evcc/";
     private static final String DEVICE = "alfen1";
 
 
     public MqttSubscriberEvcc(EvccConfig evccConfig, EmonPosterCache emonPoster) {
         this.evccConfig = evccConfig;
         this.emonPoster = emonPoster;
-        emonPoster.setName("Evcc");
+        if (evccConfig.enabled()) {
+            emonPoster.start("Evcc");
+        }
+    }
+
+    @Override
+    public List<String> getSubscriptions() {
+        return List.of(PREFIX + "#");
     }
 
 
-    @Incoming("evcc")
-    CompletionStage<Void> consume(MqttMessage<byte[]> msg) {
+    @Override
+    public String getPrefix() {
+        return PREFIX;
+    }
+
+    @Override
+    public void consume(MqttPublishMessage msg) {
         if (!evccConfig.enabled()) {
             LOG.debug("Evcc is disabled");
-            return msg.ack();
+            return;
         }
         try {
-            LOG.debug("Incoming message on: {}", msg.getTopic());
-            String[] topicParts = msg.getTopic().split("/");
+            LOG.debug("Incoming message on: {}", msg.topicName());
+            String[] topicParts = msg.topicName().split("/");
             if (topicParts.length < 4) {
                 LOG.debug("Nothing to do with this message");
-                return msg.ack();
+                return;
             }
             if (!"loadpoints".equals(topicParts[1])) {
                 LOG.debug("Not a loadpoints message");
-                return msg.ack();
+                return;
             }
             String id = topicParts[2];
             EvccConfig.Loadpoint loadpoint = evccConfig.loadpoints().get(id);
             if (loadpoint == null) {
                 LOG.debug("No loadpoint found for id: {}", id);
-                return msg.ack();
+                return;
             }
             String type = topicParts[3];
             String meterConfig = switch (type) {
@@ -68,18 +84,16 @@ public class MqttSubscriberEvcc {
                 }
                 default -> null;
             };
-            String payload = new String(msg.getPayload());
+            String payload = msg.payload().toString(StandardCharsets.UTF_8);
             if (meterConfig != null && !payload.isEmpty()) {
                 double value = Double.parseDouble(payload);
                 LOG.debug("Value for {} -> {}: {}", DEVICE, meterConfig, value);
                 emonPoster.add(DEVICE, meterConfig, value);
             }
-            return msg.ack();
         } catch (Exception e) {
-            LOG.warn("Could not parse message on topic {}", msg.getTopic(), e);
-            return msg.ack();
-            //return msg.nack(e);
+            LOG.warn("Could not parse message on topic {}", msg.topicName(), e);
         }
     }
+
 
 }

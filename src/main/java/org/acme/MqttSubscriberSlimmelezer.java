@@ -1,24 +1,22 @@
 package org.acme;
 
-import io.smallrye.reactive.messaging.mqtt.MqttMessage;
+import io.vertx.mqtt.messages.MqttPublishMessage;
 import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandles;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CompletionStage;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
 @ApplicationScoped
-public class MqttSubscriberSlimmelezer {
+public class MqttSubscriberSlimmelezer implements MqttSubscriber {
     private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private final SlimmelezerConfig slimmelezerConfig;
-    private static final Pattern PROPERTIES_REGEX = Pattern.compile("^slimmelezer/sensor/(\\S+)/state$");
+    private static final String PREFIX = "slimmelezer/sensor/";
+    private static final Pattern PROPERTIES_REGEX = Pattern.compile("^" + PREFIX + "(\\S+)/state$");
     private final EmonPosterCache emonPoster;
     private static final String DEVICE = "slimmelezer";
 
@@ -26,36 +24,43 @@ public class MqttSubscriberSlimmelezer {
     public MqttSubscriberSlimmelezer(SlimmelezerConfig slimmelezerConfig, EmonPosterCache emonPoster) {
         this.slimmelezerConfig = slimmelezerConfig;
         this.emonPoster = emonPoster;
-        emonPoster.setName("Slimmelezer");
+        if (slimmelezerConfig.enabled()) {
+            emonPoster.start("Slimmelezer");
+        }
     }
 
-
-    @Incoming("slimmelezer")
-    CompletionStage<Void> consume(MqttMessage<byte[]> msg) {
+    public void consume(MqttPublishMessage msg) {
         if (!slimmelezerConfig.enabled()) {
             LOG.debug("Slimmelezer is disabled");
-            return msg.ack();
         }
         try {
-            LOG.debug("Incoming message on: {}", msg.getTopic());
-            Matcher matcher = PROPERTIES_REGEX.matcher(msg.getTopic());
+            Thread.sleep(1);
+            LOG.debug("Incoming message on: {}", msg.topicName());
+            Matcher matcher = PROPERTIES_REGEX.matcher(msg.topicName());
             if (matcher.matches()) {
                 String meterName = matcher.group(1);
                 String meterConfig = slimmelezerConfig.items().get(meterName);
                 if (meterConfig == null) {
-                    LOG.debug("No input handled for this meter: {}: ({})", meterName, msg.getTopic());
-                    return msg.ack();
+                    LOG.debug("No input handled for this meter: {}: ({})", meterName, msg.topicName());
+                    return;
                 }
-                double value = Double.parseDouble(new String(msg.getPayload()));
+                double value = Double.parseDouble(new String(msg.payload().getBytes()));
                 emonPoster.add(DEVICE, meterConfig, value);
             } else {
-                LOG.debug("Don't know how to handle topic {}", msg.getTopic());
+                LOG.debug("Don't know how to handle topic {}", msg.topicName());
             }
-            return msg.ack();
         } catch (Exception e) {
-            LOG.warn("Could not parse message on topic {}", msg.getTopic(), e);
-            return msg.nack(e);
+            LOG.warn("Could not parse message on topic {}", msg.topicName(), e);
         }
     }
 
+    @Override
+    public List<String> getSubscriptions() {
+        return List.of(PREFIX + "#");
+    }
+
+    @Override
+    public String getPrefix() {
+        return PREFIX;
+    }
 }

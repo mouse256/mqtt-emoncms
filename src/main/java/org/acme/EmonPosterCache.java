@@ -26,15 +26,17 @@ public class EmonPosterCache {
         this.emonPoster = emonPoster;
         this.vertx = vertx;
         this.name = "";
+    }
+
+    public void start(String name) {
+        this.name = name;
         vertx.setPeriodic(Duration.ofSeconds(10).toMillis(), this::sendInfo);
     }
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
     public void add(String device, Map<String, ?> keys) {
+        LOG.debug("Adding values for {} (1): {}", device, keys);
         synchronized (valuesForDevices) {
+            LOG.debug("Adding values for {} (2): {}", device, keys);
             if (!valuesForDevices.containsKey(device)) {
                 valuesForDevices.put(device, new HashMap<>());
             }
@@ -44,10 +46,12 @@ public class EmonPosterCache {
     }
 
     private void sendInfo(Long l) {
-        LOG.debug("[{}] Sending info to emoncms", name);
+        LOG.debug("[{}] Sending info to emoncms (1)", name);
         vertx.executeBlocking((Callable<Void>) () -> {
+            LOG.debug("[{}] Sending info to emoncms (2)", name);
             Map<String, Map<String, Object>> localValues;
             synchronized (valuesForDevices) {
+                LOG.debug("[{}] Sending info to emoncms (3)", name);
                 if (valuesForDevices.isEmpty()) {
                     LOG.info("[{}] Stale, not sending info", name);
                     return null;
