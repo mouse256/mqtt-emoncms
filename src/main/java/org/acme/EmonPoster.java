@@ -59,10 +59,10 @@ public class EmonPoster {
 
 
         try {
-            LOG.info("POST: {} -- {}", request.uri(), data);
+            LOG.debug("POST: {} -- {}", request.uri(), data);
             HttpResponse<String> response = httpClient
                     .send(request, HttpResponse.BodyHandlers.ofString());
-            LOG.info("http response: {} -- {}", response.statusCode(), response.body());
+            LOG.debug("http response: {} -- {}", response.statusCode(), response.body());
         } catch (Exception e) {
             LOG.warn("Error posting to emoncms", e);
         }
