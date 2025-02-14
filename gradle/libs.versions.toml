@@ -1,0 +1,8 @@
+[versions]
+quarkus = "3.18.2"
+
+[plugins]
+quarkus = { id = "io.quarkus", version.ref = "quarkus" }
+
+[libraries]
+quarkus-bom = { group = "io.quarkus", name="quarkus-bom", version.ref = "quarkus" }

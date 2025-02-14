@@ -3,24 +3,21 @@ package org.acme;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.runtime.StartupEvent;
-import io.smallrye.reactive.messaging.mqtt.MqttMessage;
 import io.vertx.core.Vertx;
+import io.vertx.mqtt.messages.MqttPublishMessage;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-import org.eclipse.microprofile.reactive.messaging.Incoming;
-import org.eclipse.microprofile.reactive.messaging.OnOverflow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandles;
 import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -28,12 +25,13 @@ import java.util.stream.Stream;
 
 
 @ApplicationScoped
-public class MqttSubscriberQbus {
+public class MqttSubscriberQbus implements MqttSubscriber {
     private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private final Vertx vertx;
     private final MqttConfig mqttConfig;
-    private static final Pattern TOPIC_INFO_REGEX = Pattern.compile("^qbus/\\d+/info/outputs/(\\S+)$");
-    private static final Pattern TOPIC_STATE_REGEX = Pattern.compile("^qbus/\\d+/sensor/(\\S+)/(\\d+)/state$");
+    private static final String PREFIX = "qbus/";
+    private static final Pattern TOPIC_INFO_REGEX = Pattern.compile("^" + PREFIX + "\\d+/info/outputs/(\\S+)$");
+    private static final Pattern TOPIC_STATE_REGEX = Pattern.compile("^" + PREFIX + "\\d+/sensor/(\\S+)/(\\d+)/state$");
     private final ObjectMapper objectMapper;
     private HttpClient httpClient;
     private final EmonPoster emonPoster;
@@ -90,132 +88,80 @@ public class MqttSubscriberQbus {
         }
     }
 
+    @Override
+    public String getPrefix() {
+        return PREFIX;
+    }
+
+    @Override
+    public List<String> getSubscriptions() {
+        return List.of(
+                PREFIX + "+/info/outputs/#",
+                PREFIX + "+/sensor/+/+/state"
+        );
+    }
+
     record EmonData(String name, Integer value) {
     }
 
     record Info(Integer id, String name) {
     }
 
-    @Incoming("qbusInfo")
-    @OnOverflow(value = OnOverflow.Strategy.BUFFER, bufferSize = 500)
-    CompletionStage<Void> consumeInfo(MqttMessage<byte[]> msg) {
+    @Override
+    public void consume(MqttPublishMessage msg) {
         if (!qbusConfig.enabled()) {
-            return msg.ack();
+            return;
         }
+        Matcher m = TOPIC_STATE_REGEX.matcher(msg.topicName());
+        if (m.matches()) {
+            consumeState(msg, m);
+            return;
+        }
+        m = TOPIC_INFO_REGEX.matcher(msg.topicName());
+        if (m.matches()) {
+            consumeState(msg, m);
+            return;
+        }
+        LOG.debug("Can't parse topic ", msg.topicName());
+    }
+
+    private void consumeInfo(MqttPublishMessage msg, Matcher m) {
         try {
-            Matcher m = TOPIC_INFO_REGEX.matcher(msg.getTopic());
-            if (!m.matches()) {
-                LOG.warn("Can't parse info topic: {}", msg.getTopic());
-                return msg.ack();
-            }
             String type = m.group(1);
             if (!qbusConfig.types().contains(type)) {
                 LOG.debug("Ignoring info type {} since not in config", type);
-                return msg.ack();
+                return;
             }
-            List<Info> myObjects = objectMapper.readValue(msg.getPayload(), new TypeReference<>() {
+            List<Info> myObjects = objectMapper.readValue(msg.payload().getBytes(), new TypeReference<>() {
             });
-            LOG.debug("Qbus info on: {} -- {}", msg.getTopic(), myObjects);
+            LOG.debug("Qbus info on: {} -- {}", msg.topicName(), myObjects);
             LOG.info("Qbus info for type: {}", type);
             synchronized (info) {
                 info.put(type, myObjects.stream().collect(Collectors.toMap(e -> e.id, e -> e)));
             }
-            return msg.ack();
         } catch (Exception e) {
-            LOG.warn("Could not parse message on topic {}", msg.getTopic(), e);
-            return msg.nack(e);
+            LOG.warn("Could not parse message on topic {}", msg.topicName(), e);
         }
     }
 
-    @Incoming("qbusState")
-    @OnOverflow(value = OnOverflow.Strategy.BUFFER, bufferSize = 500)
-    CompletionStage<Void> consumeState(MqttMessage<byte[]> msg) {
-        if (!qbusConfig.enabled()) {
-            return msg.ack();
-        }
+
+    private void consumeState(MqttPublishMessage msg, Matcher m) {
         try {
-            Matcher m = TOPIC_STATE_REGEX.matcher(msg.getTopic());
-            if (!m.matches()) {
-                LOG.warn("Can't parse state topic: {}", msg.getTopic());
-                return msg.nack(new IllegalArgumentException("can't parse topic"));
-            }
             String type = m.group(1);
             if (!qbusConfig.types().contains(type)) {
                 LOG.debug("Ignoring state on type {} since not in config", type);
-                return msg.ack();
+                return;
             }
             Integer id = Integer.parseInt(m.group(2));
 
-            int data = Integer.parseInt(new String(msg.getPayload()));
-            LOG.info("Qbus state on: {}: {}", msg.getTopic(), data);
+            int data = Integer.parseInt(msg.payload().toString(StandardCharsets.UTF_8));
+            LOG.info("Qbus state on: {}: {}", msg.topicName(), data);
             synchronized (values) {
                 values.get(type).put(id, data);
             }
-            return msg.ack();
-        } catch (Exception e) {
-            LOG.warn("Could not parse message on topic {}", msg.getTopic(), e);
-            return msg.nack(e);
-        }
-
-
-//        CompletableFuture<Void> fut = new CompletableFuture<>();
-//
-//        processState(fut, msg, true);
-//        fut.handle((res, ex) -> {
-//            if (ex == null) {
-//                msg.ack();
-//            } else {
-//                msg.nack(ex);
-//            }
-//            return null;
-//        });
-//        return CompletableFuture.completedFuture(null);
-    }
-
-    void processState(CompletableFuture<Void> fut, MqttMessage<byte[]> msg, boolean retry) {
-        try {
-            Matcher m = TOPIC_STATE_REGEX.matcher(msg.getTopic());
-            if (!m.matches()) {
-                LOG.warn("Can't parse state topic: {}", msg.getTopic());
-                fut.complete(null);
-            }
-            String type = m.group(1);
-            if (!qbusConfig.types().contains(type)) {
-                LOG.debug("Ignoring state on type {} since not in config", type);
-                fut.complete(null);
-            }
-            Integer id = Integer.parseInt(m.group(2));
-            LOG.info("Qbus state on: {}", msg.getTopic());
-
-            Map<Integer, Info> infoMap = info.get(type);
-            if (infoMap == null) {
-                LOG.warn("Can't find info type: {}, retry: {}", type, retry);
-                if (retry) {
-                    //racecondition: info topic might not be processed yet. Retry in a sec
-                    vertx.setTimer(Duration.ofSeconds(1).toMillis(), x -> processState(fut, msg, false));
-                } else {
-                    fut.completeExceptionally(new IllegalStateException("can't find state"));
-                }
-                return;
-            }
-            Info info = infoMap.get(id);
-            if (info == null) {
-                LOG.warn("Can't find info for id: {}, type: {}, retry: {}", id, type, retry);
-                if (retry) {
-                    vertx.setTimer(Duration.ofSeconds(1).toMillis(), x -> processState(fut, msg, false));
-                } else {
-                    fut.completeExceptionally(new IllegalStateException("can't find info"));
-                }
-                return;
-            }
-
-            int data = Integer.parseInt(new String(msg.getPayload()));
-            LOG.info("State update for \"{}\" to {}", info.name, data);
-            values.get(type).put(id, data);
-            fut.complete(null);
-        } catch (Exception e) {
-            LOG.warn("Could not parse message on topic {}", msg.getTopic(), e);
-            fut.completeExceptionally(e);
+        } catch (
+                Exception e) {
+            LOG.warn("Could not parse message on topic {}", msg.topicName(), e);
         }
     }
 

@@ -16,6 +16,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 
 @ApplicationScoped
@@ -33,7 +34,9 @@ public class EmonPoster {
     public void onStart(@Observes StartupEvent startupEvent) {
         LOG.info("Startup");
         LOG.info("emoncms: {}", emoncmsConfig.endpoint());
-        httpClient = HttpClient.newBuilder().build();
+        httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(30))
+                .build();
     }
 
     void onShutdown(@Observes ShutdownEvent event) {
@@ -43,18 +46,23 @@ public class EmonPoster {
 
     public void post(String device, Map<String, ?> keys) {
         String data = getEmoncmsData(device, keys);
+        if (!emoncmsConfig.enabled().orElse(true)) {
+            LOG.info("Emoncms: disabled, not posting");
+            return;
+        }
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(emoncmsConfig.endpoint() + "/input/post"))
                 .headers("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(data))
+                .timeout(Duration.ofSeconds(30))
                 .build();
 
 
         try {
-            LOG.debug("POST: {} -- {}", request.uri(), data);
+            LOG.info("POST: {} -- {}", request.uri(), data);
             HttpResponse<String> response = httpClient
                     .send(request, HttpResponse.BodyHandlers.ofString());
-            LOG.debug("http response: {} -- {}", response.statusCode(), response.body());
+            LOG.info("http response: {} -- {}", response.statusCode(), response.body());
         } catch (Exception e) {
             LOG.warn("Error posting to emoncms", e);
         }
