@@ -122,7 +122,7 @@ public class MqttSubscriberQbus implements MqttSubscriber {
             consumeState(msg, m);
             return;
         }
-        LOG.debug("Can't parse topic ", msg.topicName());
+        LOG.debug("Can't parse topic {}", msg.topicName());
     }
 
     private void consumeInfo(MqttPublishMessage msg, Matcher m) {
