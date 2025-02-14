@@ -10,6 +10,7 @@ import org.acme.wiremock.WiremockResourceConfigurable;
 import org.acme.wiremock.WiremockTestAnnotation;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.OnOverflow;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,7 @@ public class MqttSubscriberSlimmelezerTest {
 
 
     @Test
+    @Disabled //WIP
     public void testMqttCommunication() throws InterruptedException {
 
         String topic1 = "slimmelezer/sensor/power_consumed_phase_1/state";

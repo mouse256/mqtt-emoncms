@@ -47,7 +47,7 @@ public class EmonPoster {
     public void post(String device, Map<String, ?> keys) {
         String data = getEmoncmsData(device, keys);
         if (!emoncmsConfig.enabled().orElse(true)) {
-            LOG.info("Emoncms: disabled, not posting");
+            LOG.info("Emoncms disabled, not posting to {}", device);
             return;
         }
         HttpRequest request = HttpRequest.newBuilder()

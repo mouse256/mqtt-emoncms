@@ -24,13 +24,15 @@ public class MqttSubscribers {
     private final Vertx vertx;
     private MqttClient mqttClient;
     private volatile boolean started = false;
+    private MqttConfig mqttConfig;
 
     @Inject
     @All
     List<MqttSubscriber> subscribers;
 
-    public MqttSubscribers(Vertx vertx) {
+    public MqttSubscribers(Vertx vertx, MqttConfig mqttConfig) {
         this.vertx = vertx;
+        this.mqttConfig = mqttConfig;
     }
 
     public void onStart(@Observes StartupEvent startupEvent) {
@@ -39,6 +41,10 @@ public class MqttSubscribers {
 
     private void start() {
         LOG.info("Verticle starting");
+        if (!mqttConfig.enabled()) {
+            LOG.warn("MQTT not enabled");
+            return;
+        }
         MqttClientOptions mqttClientOptions = new MqttClientOptions()
                 .setMaxInflightQueue(200);
         mqttClient = MqttClient.create(vertx, mqttClientOptions);
@@ -48,8 +54,6 @@ public class MqttSubscribers {
             started = true;
             subscribe();
         });
-        //consumer = vertx.eventBus().localConsumer(ADDRESS, this::handle)
-        //consumerInfo = vertx.eventBus().localConsumer(ADDRESS_INFO, this::handleInfo)
         mqttClient.closeHandler(v -> {
             LOG.info("Mqtt closed, restart");
             restart();
@@ -61,7 +65,7 @@ public class MqttSubscribers {
     }
 
     private void connectMqtt(Runnable onConnected) {
-        mqttClient.connect(1883, "127.0.0.1", ar -> {
+        mqttClient.connect(mqttConfig.port(), mqttConfig.host(), ar -> {
             if (ar.failed()) {
                 LOG.warn("MQTT connection failed, retrying in 60 s", ar.cause());
                 vertx.setTimer(Duration.ofSeconds(60).toMillis(), l -> {
@@ -103,6 +107,7 @@ public class MqttSubscribers {
         mqttClient.publishHandler(this::handleMsg);
         subscribers.forEach(subscriber -> {
             subscriber.getSubscriptions().forEach(topic -> {
+                LOG.info("Subscribing to topic {}", topic);
                 mqttClient.subscribe(
                         topic,
                         MqttQoS.AT_MOST_ONCE.value()
@@ -117,12 +122,14 @@ public class MqttSubscribers {
     }
 
     private void handleMsgWitchAck(MqttPublishMessage msg) {
-        LOG.info("Got msg on {}", msg.topicName());
+        LOG.debug("Got msg on {}", msg.topicName());
 
         for (MqttSubscriber subscriber : subscribers) {
             if (msg.topicName().startsWith(subscriber.getPrefix())) {
                 subscriber.consume(msg);
+                return;
             }
         }
+        LOG.warn("No subscriber found for {}", msg.topicName());
     }
 }

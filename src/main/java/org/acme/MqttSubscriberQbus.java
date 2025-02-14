@@ -119,7 +119,7 @@ public class MqttSubscriberQbus implements MqttSubscriber {
         }
         m = TOPIC_INFO_REGEX.matcher(msg.topicName());
         if (m.matches()) {
-            consumeState(msg, m);
+            consumeInfo(msg, m);
             return;
         }
         LOG.debug("Can't parse topic {}", msg.topicName());

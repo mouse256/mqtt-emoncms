@@ -25,7 +25,9 @@ public class MqttSubscriberEvcc implements MqttSubscriber {
     public MqttSubscriberEvcc(EvccConfig evccConfig, EmonPosterCache emonPoster) {
         this.evccConfig = evccConfig;
         this.emonPoster = emonPoster;
-        emonPoster.setName("Evcc");
+        if (evccConfig.enabled()) {
+            emonPoster.start("Evcc");
+        }
     }
 
     @Override

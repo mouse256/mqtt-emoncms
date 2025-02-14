@@ -24,12 +24,10 @@ public class MqttSubscriberSlimmelezer implements MqttSubscriber {
     public MqttSubscriberSlimmelezer(SlimmelezerConfig slimmelezerConfig, EmonPosterCache emonPoster) {
         this.slimmelezerConfig = slimmelezerConfig;
         this.emonPoster = emonPoster;
-        emonPoster.setName("Slimmelezer");
+        if (slimmelezerConfig.enabled()) {
+            emonPoster.start("Slimmelezer");
+        }
     }
-
-    //    @Incoming("qbusState")
-    //    @OnOverflow(value = OnOverflow.Strategy.BUFFER, bufferSize = 500)
-    //    CompletionStage<Void> consumeState(MqttMessage<byte[]> msg) {
 
     public void consume(MqttPublishMessage msg) {
         if (!slimmelezerConfig.enabled()) {

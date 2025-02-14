@@ -26,11 +26,11 @@ public class EmonPosterCache {
         this.emonPoster = emonPoster;
         this.vertx = vertx;
         this.name = "";
-        vertx.setPeriodic(Duration.ofSeconds(10).toMillis(), this::sendInfo);
     }
 
-    public void setName(String name) {
+    public void start(String name) {
         this.name = name;
+        vertx.setPeriodic(Duration.ofSeconds(10).toMillis(), this::sendInfo);
     }
 
     public void add(String device, Map<String, ?> keys) {

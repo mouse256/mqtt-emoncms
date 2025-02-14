@@ -30,7 +30,9 @@ public class MqttSubscriberAlfen implements MqttSubscriber {
         this.propertiesReader = objectMapper.readerForListOf(PropertyParsed.class);
         this.alfenConfig = alfenConfig;
         this.emonPoster = emonPoster;
-        emonPoster.setName("Alfen");
+        if (alfenConfig.enabled()) {
+            emonPoster.start("Alfen");
+        }
     }
 
     @Override
