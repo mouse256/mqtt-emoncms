@@ -18,7 +18,7 @@ public class MqttSubscriberEvcc implements MqttSubscriber {
     private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private final EvccConfig evccConfig;
     private final EmonPosterCache emonPoster;
-    private static final String PREFIX = "evcc/";
+    private static final String PREFIX = "evcc/loadpoints/";
     private static final String DEVICE = "alfen1";
 
 
