@@ -17,7 +17,7 @@ dependencies {
     testImplementation("io.rest-assured:rest-assured")
     testImplementation("io.vertx:vertx-web")
     testImplementation("io.quarkus:quarkus-vertx")
-    testImplementation("org.wiremock:wiremock:3.11.0")
+    testImplementation("org.wiremock:wiremock:3.13.2")
 }
 
 group = "org.acme"
