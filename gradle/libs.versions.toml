@@ -1,5 +1,5 @@
 [versions]
-quarkus = "3.31.0"
+quarkus = "3.31.1"
 
 [plugins]
 quarkus = { id = "io.quarkus", version.ref = "quarkus" }
