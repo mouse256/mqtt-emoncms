@@ -1,9 +1,11 @@
-package org.acme;
+package org.acme.poster.alfen;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import io.vertx.mqtt.messages.MqttPublishMessage;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.acme.EmonPosterCache;
+import org.acme.MqttSubscriber;
 import org.acme.data.PropertyParsed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,13 +23,15 @@ public class MqttSubscriberAlfen implements MqttSubscriber {
     private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private final ObjectReader propertiesReader;
     private final AlfenConfig alfenConfig;
-    private static final String PREFIX = "alfen/properties/";
-    private static final Pattern PROPERTIES_REGEX = Pattern.compile("^" + PREFIX + "(\\S+)/category/(\\S+)$");
+    private static final String PREFIX = "alfen/modbus/state/";
+    private static final Pattern PROPERTIES_REGEX = Pattern.compile("^" + PREFIX + "(\\S+)/(\\d+)/(\\S+)$");
     private final EmonPosterCache emonPoster;
+    private final ObjectMapper objectMapper;
 
     public MqttSubscriberAlfen(ObjectMapper objectMapper, AlfenConfig alfenConfig, EmonPosterCache emonPoster) {
         LOG.info("Creating mqtt subscriber for Alfen");
         this.propertiesReader = objectMapper.readerForListOf(PropertyParsed.class);
+        this.objectMapper = objectMapper;
         this.alfenConfig = alfenConfig;
         this.emonPoster = emonPoster;
         if (alfenConfig.enabled()) {
@@ -55,7 +59,8 @@ public class MqttSubscriberAlfen implements MqttSubscriber {
             Matcher matcher = PROPERTIES_REGEX.matcher(msg.topicName());
             if (matcher.matches()) {
                 String meterName = matcher.group(1);
-                String catetegoryName = matcher.group(2);
+                String meterId = matcher.group(2);
+                String catetegoryName = matcher.group(3);
                 AlfenConfig.Input.Properties propertiesConfig = alfenConfig.input().properties().get(meterName);
                 if (propertiesConfig == null) {
                     LOG.debug("No input handled for this meter: {}: ({})", meterName, msg.topicName());
@@ -66,10 +71,13 @@ public class MqttSubscriberAlfen implements MqttSubscriber {
                     LOG.debug("No input handled for this category: {} ({})", catetegoryName, msg.topicName());
                     return;
                 }
-                List<PropertyParsed> properties = propertiesReader.readValue(msg.payload().getBytes());
-                Map<String, Object> data = properties.stream()
-                        .filter(p -> categoryConfig.containsKey(p.id()))
-                        .collect(Collectors.toMap(p -> categoryConfig.get(p.id()), PropertyParsed::value));
+                Map<String, Object> values  = objectMapper.readValue(msg.payload().getBytes(), Map.class);
+                LOG.debug("Received values: {}", values);
+//                List<PropertyParsed> properties = propertiesReader.readValue(msg.payload().getBytes());
+                Map<String, Object> data = values.entrySet().stream()
+                        .filter(p -> categoryConfig.containsKey(p.getKey()))
+                        .collect(Collectors.toMap(p -> categoryConfig.get(p.getKey()), Map.Entry::getValue));
+                LOG.debug("Postring: {}: {}", meterName, data);
                 emonPoster.add(meterName, data);
             } else {
                 LOG.warn("Don't know how to handle topic {}", msg.topicName());

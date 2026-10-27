@@ -1,4 +1,4 @@
-package org.acme;
+package org.acme.poster.evcc;
 
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
